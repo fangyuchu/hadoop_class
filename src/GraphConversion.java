@@ -1,18 +1,15 @@
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
 import java.io.IOException;
 import java.util.*;
-import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 public class GraphConversion {
     //实现有向图转化为无向图，key为id（小的），value为该id链接的其他id（都比key大）
     public static class graphConversionMapper extends Mapper<LongWritable, Text, DoubleWritable, DoubleWritable> {
@@ -33,6 +30,13 @@ public class GraphConversion {
         }
     }
 
+    public static class GraphConversionPartitioner extends Partitioner<DoubleWritable,DoubleWritable>{
+        @Override
+        public int getPartition(DoubleWritable key, DoubleWritable value, int numReduceTasks){
+            return (int)(key.get())%numReduceTasks;
+        }
+    }
+
     public static class graphConversionReducer extends Reducer<DoubleWritable, DoubleWritable,DoubleWritable, DoubleWritable>{
         @Override
         protected void reduce(DoubleWritable key,Iterable<DoubleWritable> values,Context context) throws IOException, InterruptedException{
@@ -46,20 +50,17 @@ public class GraphConversion {
                 }
                 nodeList.put(node,true);
                 context.write(key,new DoubleWritable(node));
-                //s.append(node+",");
             }
-//            System.out.println("-------------------------------------------------------------------------------------");
-            //context.write(key,new Text(s.toString()));
         }
     }
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
         String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
         if (otherArgs.length != 2) {
-            System.err.println("Usage: InvertedIndex <in> <out>");
+            System.err.println("Usage: GraphConversion <in> <out>");
             System.exit(2);
         }
-        Job job = Job.getInstance(conf, "inverted index");
+        Job job = Job.getInstance(conf, "Graph Conversion");
         job.setJarByClass(GraphConversion.class);
         job.setInputFormatClass(TextInputFormat.class);
 
