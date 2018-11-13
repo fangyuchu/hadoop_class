@@ -6,9 +6,6 @@ import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.input.KeyValueTextInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
-
-import java.io.DataInput;
-import java.io.DataOutput;
 import java.io.IOException;
 import java.net.URI;
 import java.util.*;
@@ -26,7 +23,7 @@ public class SocialTriangle {
                     continue;
                 }
                 nodeList.add(node);
-                context.write(new Text(key.toString()+","+node.toString()),new IntWritable(2));
+                context.write(new Text(key.toString()+","+node.toString()),new IntWritable(0));
             }
             Double iNode;
             Double jNode;
@@ -60,68 +57,16 @@ public class SocialTriangle {
         protected void reduce(Text key,Iterable<IntWritable> values,Context context) throws IOException, InterruptedException{
             Iterator<IntWritable> value=values.iterator();
             int num=0;
-
-            System.out.println("------------------------------------------------------------------------------------");
-
+            boolean edgeExist=false;
             while(value.hasNext()){
-//                if(num>0) {
-//                    System.out.println("-----------------------------------------------------------------------------------");
-//                    System.out.println(key);
-//                    System.out.println("------------------------------------------------------------------------------------");
-//                }
-
-
-                System.out.println(value.next());
-
-
+                int a=value.next().get();
+                if(a==0)edgeExist=true;
                 num++;
             }
-
-            System.out.println("------------------------------------------------------------------------------------");
-
-
             num--;
-            context.write(key,new IntWritable(num));
-        }
-    }
-
-    private static class myKey extends Text implements WritableComparable<myKey> {
-        Text edge;
-        boolean edgeExist;
-        public myKey() {
-        }
-
-        public myKey(Text e,boolean b) {
-            edge=e;
-            edgeExist=b;
-        }
-
-        @Override
-        public void write(DataOutput out) throws IOException {
-            super.write(out);
-            out.writeBoolean(edgeExist);
-        }
-
-        @Override
-        public void readFields(DataInput in) throws IOException {
-            super.readFields(in);
-            in.readBoolean();
-        }
-
-        /*
-         * 当key进行排序时会调用以下这个compreTo方法
-         */
-        @Override
-        public int compareTo(myKey anotherKey) {
-            int e=super.compareTo(anotherKey.edge);
-            if(e==0){
-                if(edgeExist&&!anotherKey.edgeExist){
-                    e=1;
-                }else if(!edgeExist&&anotherKey.edgeExist){
-                    e=-1;
-                }
+            if(edgeExist){
+                context.write(key,new IntWritable(num));
             }
-            return e;
         }
     }
 
@@ -150,7 +95,7 @@ public class SocialTriangle {
                 KeyValueTextInputFormat.class,
                 triangleCountMapper.class,
                 triangleCountReducer.class,
-                3,
+                10,
                 Text.class,IntWritable.class,Text.class,IntWritable.class,
                 tempOutputDir1,tempOutputDir2);
 
