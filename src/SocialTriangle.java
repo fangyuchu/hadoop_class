@@ -1,13 +1,14 @@
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.DoubleWritable;
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.*;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.input.KeyValueTextInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.util.GenericOptionsParser;
+
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.io.IOException;
 import java.net.URI;
 import java.util.*;
@@ -25,7 +26,7 @@ public class SocialTriangle {
                     continue;
                 }
                 nodeList.add(node);
-                context.write(new Text(key.toString()+","+node.toString()),new IntWritable(1));
+                context.write(new Text(key.toString()+","+node.toString()),new IntWritable(2));
             }
             Double iNode;
             Double jNode;
@@ -45,7 +46,7 @@ public class SocialTriangle {
     }
 
     public static class triangleCountMapper extends Mapper<Text,Text, Text, IntWritable> {
-        //输入为key及其数量，输出为key，及其转化为IntWritable的value
+        //输入为key及其数量，输出为key，及其value转化为IntWritable的value
         @Override
         protected void map (Text key, Text value, Mapper<Text,Text, Text, IntWritable>.Context context) throws IOException, InterruptedException {
             // default InputFormat: KeyValueTextInputFormat
@@ -59,19 +60,74 @@ public class SocialTriangle {
         protected void reduce(Text key,Iterable<IntWritable> values,Context context) throws IOException, InterruptedException{
             Iterator<IntWritable> value=values.iterator();
             int num=0;
+
+            System.out.println("------------------------------------------------------------------------------------");
+
             while(value.hasNext()){
-                value.next();
+//                if(num>0) {
+//                    System.out.println("-----------------------------------------------------------------------------------");
+//                    System.out.println(key);
+//                    System.out.println("------------------------------------------------------------------------------------");
+//                }
+
+
+                System.out.println(value.next());
+
+
                 num++;
             }
+
+            System.out.println("------------------------------------------------------------------------------------");
+
+
             num--;
             context.write(key,new IntWritable(num));
         }
     }
 
+    private static class myKey extends Text implements WritableComparable<myKey> {
+        Text edge;
+        boolean edgeExist;
+        public myKey() {
+        }
+
+        public myKey(Text e,boolean b) {
+            edge=e;
+            edgeExist=b;
+        }
+
+        @Override
+        public void write(DataOutput out) throws IOException {
+            super.write(out);
+            out.writeBoolean(edgeExist);
+        }
+
+        @Override
+        public void readFields(DataInput in) throws IOException {
+            super.readFields(in);
+            in.readBoolean();
+        }
+
+        /*
+         * 当key进行排序时会调用以下这个compreTo方法
+         */
+        @Override
+        public int compareTo(myKey anotherKey) {
+            int e=super.compareTo(anotherKey.edge);
+            if(e==0){
+                if(edgeExist&&!anotherKey.edgeExist){
+                    e=1;
+                }else if(!edgeExist&&anotherKey.edgeExist){
+                    e=-1;
+                }
+            }
+            return e;
+        }
+    }
 
     public static void main(String[] args) throws Exception{
-        String tempOutputDir1="/tempoutput1";
-        String tempOutputDir2="/tempoutput2";
+        String tempOutputDir1="tempoutput1";
+        String tempOutputDir2="tempoutput2";
         Configuration conf = new Configuration();
         String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
         if (otherArgs.length != 2) {
@@ -85,7 +141,7 @@ public class SocialTriangle {
                 GraphConversion.graphConversionMapper.class,
                 GraphConversion.GraphConversionPartitioner.class,
                 SocialTriangle.adJacentNodeDetectReducer.class,
-                3,
+                10,
                 DoubleWritable.class,DoubleWritable.class,Text.class,IntWritable.class,
                 args[0],tempOutputDir1);
 

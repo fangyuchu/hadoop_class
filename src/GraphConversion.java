@@ -42,7 +42,6 @@ public class GraphConversion {
         protected void reduce(DoubleWritable key,Iterable<DoubleWritable> values,Context context) throws IOException, InterruptedException{
             Iterator<DoubleWritable> value=values.iterator();
             Map<Double,Boolean> nodeList=new HashMap<>();
-            StringBuilder s=new StringBuilder();
             while(value.hasNext()){
                 Double node=value.next().get();
                 if(nodeList.containsKey(node)){
