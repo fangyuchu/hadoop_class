@@ -5,13 +5,15 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.*;
 import org.apache.hadoop.mapreduce.lib.input.KeyValueTextInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.util.GenericOptionsParser;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.*;
 public class SocialTriangle {
     public static class adJacentNodeDetectReducer extends Reducer<DoubleWritable, DoubleWritable,Text, IntWritable>{
-        //输出和key节点相邻的节点,新生成的<key,value>为<"相邻节点1 id，相邻节点2 id"，1>(id小的在前)。同时，原有的<key,value>转化为<"key,value",1>输出
+        //输出和key节点相邻的节点,新生成的<key,value>为<"相邻节点1 id，相邻节点2 id"，1>(id小的在前)。同时，原有的<key,value>转化为<"key,value",0>输出
         @Override
         protected void reduce(DoubleWritable key,Iterable<DoubleWritable> values,Context context) throws IOException, InterruptedException{
             Iterator<DoubleWritable> value=values.iterator();
@@ -71,13 +73,36 @@ public class SocialTriangle {
     }
 
     public static void main(String[] args) throws Exception{
+        String input="/input/GraphTest";
         String tempOutputDir1="tempoutput1";
         String tempOutputDir2="tempoutput2";
+        String output="output123456";
         Configuration conf = new Configuration();
-        String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
-        if (otherArgs.length != 2) {
-            System.err.println("Usage: jar_name <in> <out>");
-            System.exit(2);
+        //String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
+//        if (otherArgs.length != 2) {
+//            System.err.println("Usage: jar_name <in> <out>");
+//            System.exit(2);
+//        }
+        FileSystem fs= FileSystem.get(URI.create(tempOutputDir1),conf);                                                //删除临时文件
+        if(fs.exists(new Path(tempOutputDir1))) {
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+            System.out.println("delete directory:"+tempOutputDir1);
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+            fs.delete(new Path(tempOutputDir1),true);
+        }
+        if(fs.exists(new Path(tempOutputDir2))){
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+            System.out.println("delete directory:"+tempOutputDir2);
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+            fs= FileSystem.get(URI.create(tempOutputDir2),conf);
+            fs.delete(new Path(tempOutputDir2),true);
+        }
+        if(fs.exists(new Path(output))){
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+            System.out.println("delete directory:"+output);
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+            fs= FileSystem.get(URI.create(output),conf);
+            fs.delete(new Path(output),true);
         }
 
         Job nd = SetJob.setJob(
@@ -88,7 +113,7 @@ public class SocialTriangle {
                 SocialTriangle.adJacentNodeDetectReducer.class,
                 10,
                 DoubleWritable.class,DoubleWritable.class,Text.class,IntWritable.class,
-                args[0],tempOutputDir1);
+                input,tempOutputDir1);
 
         Job tc=SetJob.setJob(
                 conf,"TriangleCount",SocialTriangle.class,
@@ -107,13 +132,24 @@ public class SocialTriangle {
                 Sum.SumReducer.class,
                 1,
                 Text.class,IntWritable.class,Text.class,IntWritable.class,
-                tempOutputDir2,args[1]
+                tempOutputDir2,output
         );
         sm.waitForCompletion(tc.waitForCompletion(nd.waitForCompletion(true)));                                 //执行任务
-        FileSystem fs= FileSystem.get(URI.create(tempOutputDir1),conf);                                                 //删除临时文件
+
+        fs= FileSystem.get(URI.create(tempOutputDir1),conf);                                                            //删除临时文件
         fs.delete(new Path(tempOutputDir1),true);
         fs= FileSystem.get(URI.create(tempOutputDir2),conf);
         fs.delete(new Path(tempOutputDir2),true);
+        try {                                                                                                           //将最终计数结果读出并输出
+            InputStream in = fs.open(new Path(output+"/part-r-00000"));
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+            IOUtils.copy(in,System.out);
+            System.out.println("-----------------------------------------------------------------------------------------------------");
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        fs= FileSystem.get(URI.create(output),conf);
+        fs.delete(new Path(output),true);
         System.exit(1);
     }
 }
